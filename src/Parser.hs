@@ -29,8 +29,6 @@ applyable =
 
 varName :: Parser Name
 varName = do
-    label "variable not to be called let" $ notFollowedBy $ chunk "let"
-    label "variable not to be called in" $ notFollowedBy $ chunk "in"
     name <- some alphaNumChar
     case name of
         "let" -> 
@@ -71,7 +69,7 @@ app :: Parser Term
 app = do
     f <- applyable
     applied <- many $ try (chunk " " >> toApplyTo)
-    _ <- trace ("Applying: " <> show f <> " to " <> show applied) chunk ""
+    -- _ <- trace ("Applying: " <> show f <> " to " <> show applied) chunk ""
     pure $ go f applied
     where 
       go t [] = t
@@ -121,7 +119,7 @@ showParse input = case parseTerm input of
 showParse' :: Show a => Parser a -> String -> a
 showParse' parser input = case parse parser "" input of
     Left err -> error $ errorBundlePretty err
-    Right x -> trace (show x) x
+    Right x -> x
 
 runProgram :: String -> Term
 runProgram = eval . showParse
