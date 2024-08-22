@@ -80,12 +80,6 @@ eval term = -- trace ("Eval: " <> show term) $
     Let x term' term'' -> eval $ expandLet x term' term''
     term' -> term'
 
--- Function application
--- betaReduce :: Term -> Term
--- betaReduce expr = case expr of
---     Apl (Lam x term) (Var y) -> substitute x y term
---     term -> term
-
 -- Apply a term to another term, beta reducing if necessary
 apply :: Term -> Term -> Term
 apply term term' = case eval term of
