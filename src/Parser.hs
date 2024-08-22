@@ -27,14 +27,30 @@ applyable =
   <|> try bracketed
   <|> try var
 
+-- Operators are defined in LambdaCalc.hs
+operators :: [(String, Term)]
+operators =
+  [ ("(+)", plus)
+  , ("(-)", minus)
+  , ("id", identity)
+  , ("True", Lit (Bool_ True))
+  , ("False", Lit (Bool_ False))
+  , ("if", ternary)
+  ]
+
+builtin :: Parser Term
+builtin = go operators empty
+  where
+    -- Either parse the syntax and return the value or try the next piece of syntax
+    go [] parser = parser
+    go ((syntax, value):xs) parser = (chunk syntax >> pure value) <|> go xs parser
+
 varName :: Parser Name
 varName = do
     name <- some alphaNumChar
     case name of
-        "let" -> 
-          fail "let is a reserved keyword"
-        "in" -> 
-          fail "in is a reserved keyword"
+        "let" -> fail "let is a reserved keyword"
+        "in" -> fail "in is a reserved keyword"
         _ -> pure name
 
 var :: Parser Term
@@ -50,20 +66,20 @@ lambda = do
 
 letExpr :: Parser Term
 letExpr = do
-    _ <- chunk "let "
+    _ <- chunk "let" >> space
     name <- varName
-    _ <- chunk " = "
+    _ <- space >> chunk "=" >> space
     t1 <- term
-    -- _ <- trace ("Let name: " <> name) chunk ""
-    -- _ <- trace ("Let value: " <> show t1) chunk ""
-    _ <- chunk " in "
+    _ <- space >> chunk "in" >> space
     t2 <- term
     pure $ Let name t1 t2
 
+space :: Parser String
+space = many $ satisfy (`elem` [' ', '\n', '\t'])
 
 -- For app, we want (+) 1 2 to go to ((+) 1) 2
 toApplyTo :: Parser Term
-toApplyTo = intLit <|> try var <|> bracketed
+toApplyTo = intLit <|> try builtin <|> try var <|> try bracketed
 
 app :: Parser Term
 app = do
@@ -88,25 +104,11 @@ digit = satisfy (`elem` ['0'..'9'])
 alphaNumChar :: Parser Char
 alphaNumChar = satisfy (`elem` ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'])
 
-builtin :: Parser Term
-builtin = go operators empty
-  where
-    go [] parser = parser
-    go ((syntax, t):xs) parser = parseOperator syntax t <|> go xs parser
-    parseOperator syntax t =
-      do
-        _ <- chunk syntax
-        pure t
-
-operators :: [(String, Term)]
-operators =
-  [ ("(+)", plus)
-  , ("(-)", minus)
-  , ("id", identity)
-  ]
-
 intLit :: Parser Term
-intLit = Lit . Int_ . read <$> some digit
+intLit = Lit . Int_ <$> do
+  sign <- chunk "-" <|> chunk ""
+  digs <- some digit
+  pure $ read (sign <> digs)
 
 parseTerm :: String -> Either ParseErr Term
 parseTerm input = parse term "" input

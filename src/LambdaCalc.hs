@@ -16,11 +16,11 @@ instance Eq (Term -> Term) where
 
 instance Show Term where
     show term = case term of
-        Var name -> "Var (" ++ name ++ ")"
-        Lam name term' -> "Lam (" ++ name ++ " -> " ++ show term' ++ ")"
-        Apl term' term'' -> "Apl (" ++ show term' ++ " | " ++ show term'' ++ ")"
+        Var name -> "Var (" ++ show name ++ ")"
+        Lam name term' -> "Lam (" ++ show name ++ ") (" ++ show term' ++ ")"
+        Apl term' term'' -> "Apl (" ++ show term' ++ ") (" ++ show term'' ++ ")"
         Lit lit -> show lit
-        Let name term' term'' -> "Let (" ++ name ++ " = " ++ show term' ++ " in " ++ show term'' ++ ")"
+        Let name term' term'' -> "Let (" ++ show name ++ ") (" ++ show term' ++ ") (" ++ show term'' ++ ")"
         Func _ -> "Function"
 
 data Literal = Int_ Int
@@ -35,12 +35,20 @@ int term = case term of
     Lit (Int_ x) -> x
     _ -> error "Type error: Expected Int"
 
+bool :: Term -> Bool
+bool term = case term of
+    Lit (Bool_ x) -> x
+    _ -> error "Type error: Expected Bool"
+
 -- When you apply a function to a term, you get a term
 plus :: Term
 plus = Func (\x -> Func (\y -> Lit (Int_ (int x + int y))))
 
 minus :: Term
 minus = Func (\x -> Func (\y -> Lit (Int_ (int x - int y))))
+
+ternary :: Term
+ternary = Func (\x -> Func (\y -> Func (\z -> if bool x then y else z)))
 
 incr :: Term
 incr = Func (\x -> Lit (Int_ (int x + 1)))
@@ -65,7 +73,8 @@ alphaConvert term = case term of
 
 -- Evaluate an expression
 eval :: Term -> Term
-eval term = trace ("Eval: " <> show term) $ case term of
+eval term = -- trace ("Eval: " <> show term) $
+  case term of
     Apl (Lit _) _ -> error "Type error: Cannot apply a literal"
     Apl term' term'' -> apply term' term''
     Let x term' term'' -> eval $ expandLet x term' term''
@@ -80,7 +89,7 @@ eval term = trace ("Eval: " <> show term) $ case term of
 -- Apply a term to another term, beta reducing if necessary
 apply :: Term -> Term -> Term
 apply term term' = case eval term of
-    Func f -> eval $ f term'
+    Func f -> eval $ f (eval term')
     Let x t t' -> eval $ Let x t (apply t' term')
     Lam v t -> eval $ Let v (eval term') t
     Var _ -> error $ "Type error: (apply) Cannot apply a variable. Term: " ++ show term ++ " Term': " ++ show term'

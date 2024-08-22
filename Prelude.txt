@@ -1,0 +1,2 @@
+let and = \x -> \y -> if x (if y True False) False in
+let or  = \x -> \y -> if x True (if y True False) in
