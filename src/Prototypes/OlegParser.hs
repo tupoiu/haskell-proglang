@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use <$>" #-}
 {-# HLINT ignore "Eta reduce" #-}
-module Parser where
+module Prototypes.OlegParser where
 
 import Text.Megaparsec
 import Prototypes.OlegConstraintsTypechecker
@@ -16,7 +16,7 @@ term =
   try infixParse
   <|> try intLit
   <|> try lambda
-  -- <|> try letExpr
+  <|> try letExpr
   <|> try app
   <|> try builtin
   <|> try bracketed
@@ -81,15 +81,15 @@ lambda = do
     t <- term
     pure $ L name t
 
--- letExpr :: Parser Term
--- letExpr = do
---     _ <- chunk "let" >> space
---     name <- varName
---     _ <- space >> chunk "=" >> space
---     t1 <- term
---     _ <- space >> chunk "in" >> space
---     t2 <- term
---     pure $ Let name t1 t2
+letExpr :: Parser Term
+letExpr = do
+    _ <- chunk "let" >> space
+    name <- varName
+    _ <- space >> chunk "=" >> space
+    t1 <- term
+    _ <- space >> chunk "in" >> space
+    t2 <- term
+    pure $ Let name t1 t2
 
 space :: Parser String
 space = many $ satisfy (`elem` [' ', '\n', '\t'])
@@ -145,3 +145,6 @@ runProgram = eval [] . showParse
 
 typecheck :: String -> (Typ, TVE)
 typecheck input = tEval [] (showParse input) tvenv0
+
+tc :: String -> Typ
+tc = fst . typecheck

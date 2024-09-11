@@ -3,12 +3,14 @@ import Test.Hspec
 
 import LambdaCalc
 import Parser (runProgram, showParse)
+import Oleg
 
 main :: IO ()
 main = hspec $ 
   do
     lambdaCalcEval
     lambdaCalcParseAndEval
+    typechecking
 
 lambdaCalcEval = describe "Lambda Calculus Evaluator" $
   do

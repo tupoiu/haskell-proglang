@@ -1,3 +1,6 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use tuple-section" #-}
+{-# HLINT ignore "Eta reduce" #-}
 module Prototypes.OlegConstraintsTypechecker where
 
 import qualified Data.Map as Map
@@ -57,7 +60,7 @@ eval env expr = case expr of
   L nx out -> VC (\vx -> eval (ext env nx vx) out) -- Evaluate out with nx as vx
   A vf vx -> case eval env vf of
     VC f -> f (eval env vx)
-    _ -> error $ "Type error: cannot apply an Int"
+    _ -> error $ "Type error: cannot apply a non-function"
   I vx -> VI vx
   Builtin _ vx -> vx
   Let nx vx out -> eval (ext env nx (eval env vx)) out
@@ -122,6 +125,7 @@ tvLookup :: TVE -> TVarName -> Maybe Typ
 tvLookup (TVE _ tvenv) tvx = Map.lookup tvx tvenv
 
 -- We know that type variable tvx is of type tx
+-- ONLY USED IN TESTS !!!!
 tvExt :: TVE -> TVarName -> Typ -> TVE
 tvExt (TVE n tvmap) tvx tx = TVE n (Map.insert tvx tx tvmap)
 
@@ -140,6 +144,8 @@ tvsub tve (TV n) = case tvLookup tve n of
 -- will return
 -- [(1, TV 2 :> TV 2), (3, TV 2 :> TV 2), (4, TV 2 :> TV 2)]
 unify :: Typ -> Typ -> TVE -> Either String TVE
+unify (TV tvx) ty tve | tvOccurs tve tvx ty = error "Can't have a type contain itself" 
+unify tx (TV tvy) tve | tvOccurs tve tvy tx = error "Can't have a type contain itself" 
 unify tx ty tve = unify' (tvsub tve tx) (tvsub tve ty) tve
 
 -- unify' should loop through all of the entries of the tve and set their variables to match
@@ -201,10 +207,10 @@ tvReplace' tvmap tvx ty = case Map.lookup tvx tvmap of
       Just tu' -> (tvu, tu')
 
 tvOccurs :: TVE -> TVarName -> Typ -> Bool
-tvOccurs tve tvx ty = case ty of
-  TInt -> False
-  (ta :> tb) -> tvOccurs tve tvx ta || tvOccurs tve tvx tb
-  (TV tvz) -> case tvLookup tve tvz of
+tvOccurs tve tvx TInt = False
+tvOccurs tve tvx (ta :> tb) = tvOccurs tve tvx ta || tvOccurs tve tvx tb
+tvOccurs tve tvx (TV tvz) | tvx == tvz = True  
+tvOccurs tve tvx (TV tvz) = case tvLookup tve tvz of
     Nothing -> False
     Just tz -> tvOccurs tve tvx tz
 
@@ -224,23 +230,37 @@ testUnify2 = unify (TV 2) (TV 4) tve
 testUnify3 :: Either String TVE
 testUnify3 = unify TInt (TV 2 :> TV 2) exampleTVE
 
-type TEnv = [(Name, Typ)]
+-- No let polymorphism
+-- type TEnv = [(Name, Typ)]
 
-tLkup :: TEnv -> Name -> Typ
+-- With let polymorphism 
+-- > We need to save the operations that create the type constraints so that we can
+--   instantiate the type of an expression wherever it appears. This lets us have
+--   id id be typechecked correctly as we create a new type variable for each usage
+type TEnv = [(Name, TVE -> (Typ, TVE))]
+
+tLkup :: TEnv -> Name -> TVE -> (Typ, TVE)
 tLkup env nx = case lookup nx env of
-  Just tx -> tx
+  Just instantiation_x -> instantiation_x
   Nothing -> error $ "Unbound variable in typechecking: " <> nx
 
+-- Add a known type of x to the environment
 tExt :: TEnv -> Name -> Typ -> TEnv
-tExt env nx tx = (nx, tx) : env
+tExt env nx tx = (nx, \tve -> (tx, tve)) : env
+
+-- Add an instantiation of the type of x to the type environment
+tExtInstantiate :: TEnv -> Name -> (TVE -> (Typ, TVE)) -> TEnv
+tExtInstantiate env nx instantiation_x = (nx, instantiation_x) : env
 
 tEval :: TEnv -> Term -> TVE -> (Typ, TVE)
 tEval env vx tve0 = (tvsub tve tx, tve)
   where (tx, tve) = tEval' env vx tve0
 
 tEval' :: TEnv -> Term -> TVE -> (Typ, TVE)
-tEval' env t tve0 = case t of
-  V nx -> (tLkup env nx, tve0)
+tEval' env t tve0 = 
+  -- newTrace ("Term: " <> show t <> "\n") $ 
+  case t of
+  V nx -> tLkup env nx tve0
   L nx out ->
     let
       -- Make a new TV for the name in the lambda
@@ -276,21 +296,17 @@ tEval' env t tve0 = case t of
   Builtin tx _ -> (tx, tve0)
   Let nx vx out ->
     let
-      -- Evaluate the type of the variable
-      (tx, tve1) = tEval' env vx tve0
       -- We need to instantiate the type of the variable wherever it is in the output,
       -- so we need to return an "alteration" which can instantiate our let
-      (tOut, tve2) = tEval' (tExt env nx tx) out tve1
-    in (tOut, tve2)
-  -- IFZ vp vx vy ->
-  --   let
-  --     tp = tEval' env vp
-  --     tx = tEval' env vx
-  --     ty = tEval' env vy
-  --   in case tp of
-  --     TInt | tx == ty -> tx
-  --     TInt -> error $ "Type error: If branches return two different types, " <> show tx <> " and " <> show ty
-  --     _ -> error $ "TypeError: Ifzero takes in an Int"
+      instantiation_x tve = tEval' env vx tve
+      -- We can put this in the type environment
+      newEnv = tExtInstantiate env nx instantiation_x
+      -- First we typecheck the inner value of the let to propagate constraints about
+      -- variables it contains. e.g. \f -> let y = f x in ... implies that f is a function.
+      (_, tve1) = tEval' env vx tve0
+      (tOut, tve2) = tEval' newEnv out tve1
+    in 
+        (tOut, tve2)
   -- vx :+ vy ->
   --   let
   --     (tx, tve1) = tEval' env vx tve0
@@ -313,3 +329,6 @@ tE' t = tEval' [] t tvenv0
 
 tEnvFromList :: [(TVarName, Typ)] -> TVE
 tEnvFromList = TVE (-999) . Map.fromList
+
+exampleTerm :: Term
+exampleTerm = Let "id" (L "x" (A (V "x") (V "x"))) (A (V "id") (V "id"))

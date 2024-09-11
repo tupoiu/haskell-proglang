@@ -71,6 +71,8 @@ mult = (L "a" TInt (L "b" TInt (
     (IFZ (V "ct") (I 0) ((V "b") :+ (A (V "g") ((V "ct") :+ (I (-1)))))))) `A` (V "a")
   )))
 
+-- TYPE CHECKING
+
 data Typ = TInt
          | Typ :> Typ
          deriving (Show, Eq)
@@ -82,6 +84,7 @@ tLkup env nx = case lookup nx env of
   Just tx -> tx
   Nothing -> error $ "Unbound variable in typechecking: " <> nx
 
+-- Add a known type to the environment
 tExt :: TEnv -> Name -> Typ -> TEnv
 tExt env nx tx = (nx, tx) : env
 
