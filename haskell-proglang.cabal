@@ -58,7 +58,7 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules: LambdaCalc, Parser, TypeChecker
+    exposed-modules: LambdaCalc, Parser, Prototypes.OlegConstraintsTypechecker
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -128,4 +128,5 @@ test-suite haskell-proglang-test
     build-depends:
         base ^>=4.17.2.1,
         haskell-proglang,
+        containers,
         hspec
